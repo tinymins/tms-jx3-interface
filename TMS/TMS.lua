@@ -92,7 +92,7 @@ TMS.print = function(nChannel,szText)
 	local me = GetClientPlayer()
 	if szText == nil or type(nChannel) == "string" or type(nChannel) == "boolean" then
 		szText = nChannel
-		nChannel = _WYAutoData.cEchoChanel or PLAYER_TALK_CHANNEL.LOCAL_SYS
+		nChannel = PLAYER_TALK_CHANNEL.LOCAL_SYS
 	end
     if type(szText) == "boolean" then szText = (szText and "true") or "false" end 
 	local tSay = {{ type = "text", text = szText }}
@@ -107,10 +107,12 @@ TMS.print = function(nChannel,szText)
 end
 -- (void) TMS.print(optional nChannel,szText)    -- 换行输出消息
 TMS.println = function(nChannel,szText)
-	if type(nChannel) == "string" or type(nChannel) == "number"  then
+	if (type(nChannel) == "string" or type(nChannel) == "number") and szText == nil then
         TMS.print(nChannel .. "\n")
     elseif type(nChannel) == "boolean" then
         TMS.print(nChannel, (szText and "true\n") or "false\n" )
+    else
+        TMS.print(nChannel, szText.. "\n")
 	end
 end
 -- (void)TMS.Gebug(szText)
@@ -310,4 +312,4 @@ Wnd.OpenWindow(_TMS.szIniFile,"TMS")
 --第一个参数是窗体文件路径，第二个参数是窗体名，也就是.ini的第一行那个名字。
 ---------------------------------------------------
 -- DEBUG
--- RegisterEvent("CALL_LUA_ERROR", function() OutputMessage("MSG_SYS", arg0) end)
+RegisterEvent("CALL_LUA_ERROR", function() OutputMessage("MSG_SYS", arg0) end)

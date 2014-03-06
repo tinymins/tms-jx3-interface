@@ -16,12 +16,17 @@ local _LogOffCache = {
     bLogOffExRunning = false,
 }
 _LogOffData = {
+    cEchoChanel = PLAYER_TALK_CHANNEL.LOCAL_SYS,
+    bLogOffCompletely = false,
     bTimeOutLogOff = false,
     nTimeOutUnixTime = GetCurrentTime()+3600,
     bPlayerLeaveLogOff = false,
     szPlayerLeaveNames = "",
     bClientLevelOverLogOff = false,
     nClientLevelOver = 90,
+    bTargetBloodLessLogOff = false,
+    eTargetBloodLessTar = nil,
+    dwTargetBloodLessPercentage = 0.1,
 }
 for k, _ in pairs(_LogOffData) do
 	RegisterCustomData("_LogOffData." .. k)
@@ -69,6 +74,7 @@ end
 Tms_LogOff.ConditionLogOff = function()
     local bLogOff = false
     if _LogOffData.bTimeOutLogOff and GetCurrentTime()>_LogOffData.nTimeOutUnixTime then bLogOff = true end
+    -- 指定玩家消失
     local bAllPlayerLeave = true
     if _LogOffData.bPlayerLeaveLogOff and _LogOffData.szPlayerLeaveNames~="" then
         local tNearPlayer = TMS.GetNearPlayerList()
@@ -79,34 +85,45 @@ Tms_LogOff.ConditionLogOff = function()
         end
     else bAllPlayerLeave = false
     end
-    if _LogOffData.bClientLevelOverLogOff and GetClientPlayer().nLevel>=_LogOffData.nClientLevelOver then bLogOff=true end
     bLogOff = bLogOff or bAllPlayerLeave
-    if bLogOff then TMS.LogOff(true) end
+    -- 当前角色等级超过
+    if _LogOffData.bClientLevelOverLogOff and GetClientPlayer().nLevel>=_LogOffData.nClientLevelOver then bLogOff=true end
+    --指定目标血量不足
+    if _LogOffData.bTargetBloodLessLogOff and _LogOffData.eTargetBloodLessTar and (_LogOffData.eTargetBloodLessTar.nCurrentLife / _LogOffData.eTargetBloodLessTar.nMaxLife)*100<_LogOffData.dwTargetBloodLessPercentage then
+        bLogOff = true
+    end
+    -- 下线判定
+    if bLogOff then TMS.LogOff(_LogOffData.bLogOffCompletely) end
 end
 Tms_LogOff.ToggleConditionLogOff = function(bRunning)
-    local szTip = ""
     if bRunning==nil then bRunning = not _LogOffCache.bLogOffExRunning end
     _LogOffCache.bLogOffExRunning = bRunning
     if _LogOffCache.bLogOffExRunning then
         TMS.BreatheCall("TMS_ConditionLogOff", Tms_LogOff.ConditionLogOff, 1000)
-        szTip = szTip .. "----------------------------------------------\n"
-        szTip = szTip .. "[茗伊插件]游戏将在符合以下条件之一时退出登录：\n"
-        if _LogOffData.bTimeOutLogOff then
-            local tDate = TimeToDate(_LogOffData.nTimeOutUnixTime)
-            szTip = szTip .. "※当系统时间超过：" .. (string.format("%04d年%02d月%02d日 %02d:%02d:%02d (%d秒后)", tDate.year, tDate.month, tDate.day, tDate.hour, tDate.minute, tDate.second, _LogOffData.nTimeOutUnixTime-GetCurrentTime())) .. "\n"
-        end
-        if _LogOffData.bPlayerLeaveLogOff then
-            szTip = szTip .. "※当下列玩家全部消失于视野：" .. _LogOffData.szPlayerLeaveNames .. "\n"
-        end
-        if _LogOffData.bClientLevelOverLogOff then
-            szTip = szTip .. "※当自身等级达到" .. _LogOffData.nClientLevelOver .. "级时。\n"
-        end
-        szTip = szTip .. "----------------------------------------------\n"
+        TMS.println(_LogOffData.cEchoChanel, "[茗伊插件]条件登出已开启。")
+        Tms_LogOff.ShowCurrentCondition()
     else
         TMS.BreatheCall("TMS_ConditionLogOff")
-        szTip = szTip .. "[茗伊插件]条件登出已关闭\n"
+        TMS.println(_LogOffData.cEchoChanel, "[茗伊插件]条件登出已关闭。")
     end
-    TMS.print(szTip)
+end
+Tms_LogOff.ShowCurrentCondition = function() 
+    TMS.println(_LogOffData.cEchoChanel, "--------------------------------------------------")
+    TMS.println(_LogOffData.cEchoChanel, "[茗伊插件]游戏将在符合以下条件之一时返回到"..((_LogOffData.bLogOffCompletely and "账号登录界面") or "角色选择界面").."：")
+    if _LogOffData.bTimeOutLogOff then
+        local tDate = TimeToDate(_LogOffData.nTimeOutUnixTime)
+        TMS.println(_LogOffData.cEchoChanel, "※当系统时间超过：" .. (string.format("%04d年%02d月%02d日 %02d:%02d:%02d (%d秒后)", tDate.year, tDate.month, tDate.day, tDate.hour, tDate.minute, tDate.second, _LogOffData.nTimeOutUnixTime-GetCurrentTime())) )
+    end
+    if _LogOffData.bPlayerLeaveLogOff then
+        TMS.println(_LogOffData.cEchoChanel, "※当下列玩家全部消失于视野：" .. _LogOffData.szPlayerLeaveNames )
+    end
+    if _LogOffData.bClientLevelOverLogOff then
+        TMS.println(_LogOffData.cEchoChanel, "※当自身等级达到" .. _LogOffData.nClientLevelOver .. "级时。")
+    end
+    if _LogOffData.bTargetBloodLessLogOff and _LogOffData.eTargetBloodLessTar then
+        TMS.println(_LogOffData.cEchoChanel, "※当[".._LogOffData.eTargetBloodLessTar.szName.."(".._LogOffData.eTargetBloodLessTar.dwID..")]血量低于" .. _LogOffData.dwTargetBloodLessPercentage .. "%时。")
+    end
+    TMS.println(_LogOffData.cEchoChanel, "--------------------------------------------------")
 end
 ---------------------------------------------------
 -- 创建菜单
@@ -136,7 +153,56 @@ function Tms_LogOff.GetMenuList()
                 fnMouseEnter = function()
                     TMS.MenuTip("【条件登出】\n点击开始运行，当条件满足时自动下线。\n再次点击取消设定。")
                 end,
-                fnAutoClose = function() return true end
+                fnAutoClose = function() return true end,
+            },
+            {  -- 当前设置
+                szOption = "当前设置 ",
+                szIcon = "ui/Image/UICommon/Talk_Face.UITex";nFrame=119;szLayer = "ICON_RIGHT",
+                bCheck = false,
+                bChecked = false,
+                fnAction = function() end,
+                fnAutoClose = function() return true end,
+                {  -- 发布
+                    szOption = "发布 ",
+                    szIcon = "ui/Image/UICommon/Talk_Face.UITex";nFrame=119;szLayer = "ICON_RIGHT",
+                    bCheck = false,
+                    bChecked = false,
+                    fnAction = function()
+                        Tms_LogOff.ShowCurrentCondition()
+                    end,
+                    fnMouseEnter = function()
+                        TMS.MenuTip("【条件登出】\n发布当前下线条件设置到指定频道。")
+                    end,
+                    fnAutoClose = function() return false end,
+                },
+                {  -- 发布频道
+                    szOption = "【发布频道】 ",
+                    --SYS
+                    {szOption = "系统频道", bMCheck = true, bChecked = _LogOffData.cEchoChanel == PLAYER_TALK_CHANNEL.LOCAL_SYS, rgb = GetMsgFontColor("MSG_SYS", true), fnAction = function() _LogOffData.cEchoChanel = PLAYER_TALK_CHANNEL.LOCAL_SYS end, fnAutoClose = function() return true end},
+                    --近聊频道
+                    {szOption = g_tStrings.tChannelName.MSG_NORMAL, bMCheck = true, bChecked = _LogOffData.cEchoChanel == PLAYER_TALK_CHANNEL.NEARBY, rgb = GetMsgFontColor("MSG_NORMAL", true), fnAction = function() _LogOffData.cEchoChanel = PLAYER_TALK_CHANNEL.NEARBY end, fnAutoClose = function() return true end},
+                    --团队频道
+                    {szOption = g_tStrings.tChannelName.MSG_TEAM, bMCheck = true, bChecked = _LogOffData.cEchoChanel == PLAYER_TALK_CHANNEL.RAID, rgb = GetMsgFontColor("MSG_TEAM", true), fnAction = function() _LogOffData.cEchoChanel = PLAYER_TALK_CHANNEL.RAID end, fnAutoClose = function() return true end},
+                    --帮会频道
+                    {szOption = g_tStrings.tChannelName.MSG_GUILD, bMCheck = true, bChecked = _LogOffData.cEchoChanel == PLAYER_TALK_CHANNEL.TONG, rgb = GetMsgFontColor("MSG_GUILD", true), fnAction = function() _LogOffData.cEchoChanel = PLAYER_TALK_CHANNEL.TONG end, fnAutoClose = function() return true end},
+                    szIcon = "ui/Image/UICommon/Talk_Face.UITex";nFrame=119;szLayer = "ICON_RIGHT",
+                    bCheck = false,
+                    bChecked = false,
+                    fnAction = function() end,
+                    fnAutoClose = function() return true end,
+                }
+            },
+            {  -- 符合条件时
+                szOption = "符合条件返回到 ",
+                szIcon = "ui/Image/UICommon/Talk_Face.UITex";nFrame=119;szLayer = "ICON_RIGHT",
+                bCheck = false,
+                bChecked = false,
+                fnAction = function() end,
+                fnAutoClose = function() return true end,
+                --返回到角色选择
+                {szOption = "返回到角色选择", bMCheck = true, bChecked = not _LogOffData.bLogOffCompletely, rgb = GetMsgFontColor("MSG_SYS", true), fnAction = function() _LogOffData.bLogOffCompletely = false end, fnAutoClose = function() return true end},
+                --返回到账户登录
+                {szOption = "返回到账户登录", bMCheck = true, bChecked = _LogOffData.bLogOffCompletely, rgb = GetMsgFontColor("MSG_SYS", true), fnAction = function() _LogOffData.bLogOffCompletely = true end, fnAutoClose = function() return true end},
             },
             {bDevide = true},
             {  -- 指定时间后下线
@@ -191,6 +257,33 @@ function Tms_LogOff.GetMenuList()
                     else
                         -- 弹出界面
                         GetUserInputNumber(90, 100, nil, function(num) _LogOffData.nClientLevelOver = num _LogOffData.bClientLevelOverLogOff=true end, function() end, function() end)
+                    end
+                end,
+                fnMouseEnter = function()
+                    TMS.MenuTip("【条件登出】\n点击设定在自身等级到达指定值之后下线，如24级则输入24点击确定。\n再次点击取消设定。")
+                end,
+                fnAutoClose = function() return true end
+            },
+            {  -- 当前目标血量低于指定百分比下线
+                szOption = "指定目标血量低于指定百分比下线 ",
+                szIcon = "ui/Image/UICommon/Talk_Face.UITex";nFrame=119;szLayer = "ICON_RIGHT",
+                bCheck = true,
+                bChecked = _LogOffData.bTargetBloodLessLogOff and _LogOffData.eTargetBloodLessTar,
+                fnAction = function()
+                    if _LogOffData.bTargetBloodLessLogOff and _LogOffData.eTargetBloodLessTar then
+                        _LogOffData.bTargetBloodLessLogOff = false
+                    else
+                        -- 弹出界面
+                        local tar = GetTargetHandle(GetClientPlayer().GetTarget())
+                        if not tar then
+                            OutputMessage("MSG_SYS","[茗伊快速登出](╯‵□′)╯︵┻━┻请先选择一个目标。")
+                        else
+                            GetUserInputNumber(_LogOffData.dwTargetBloodLessPercentage, 100, nil, function(num)
+                                _LogOffData.dwTargetBloodLessPercentage = num
+                                _LogOffData.bTargetBloodLessLogOff = true
+                                _LogOffData.eTargetBloodLessTar = tar
+                            end, function() end, function() end)
+                        end
                     end
                 end,
                 fnMouseEnter = function()
