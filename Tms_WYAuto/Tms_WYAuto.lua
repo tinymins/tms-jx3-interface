@@ -472,6 +472,7 @@ _WYAutoCache.LastTarget = {
 ---------------------------------------------------
 -- (void)×Ô¶¯×ª»ð
 Tms_WYAuto.AutoFocusTarget = function()
+    if not _WYAutoData.bAuto then return end
     local me = GetClientPlayer() if not me then return end
     local tar = GetTargetHandle( me.GetTarget() )
     local tNearNpcList = TMS.GetNearNpcList()

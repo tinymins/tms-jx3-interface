@@ -312,4 +312,4 @@ Wnd.OpenWindow(_TMS.szIniFile,"TMS")
 --第一个参数是窗体文件路径，第二个参数是窗体名，也就是.ini的第一行那个名字。
 ---------------------------------------------------
 -- DEBUG
-RegisterEvent("CALL_LUA_ERROR", function() OutputMessage("MSG_SYS", arg0) end)
+-- RegisterEvent("CALL_LUA_ERROR", function() OutputMessage("MSG_SYS", arg0) end)
